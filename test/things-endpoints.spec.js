@@ -2,7 +2,7 @@ const knex = require('knex')
 const app = require('../src/app')
 const helpers = require('./test-helpers')
 
-describe('Things Endpoints', function () {
+describe.only('Things Endpoints', function () {
   let db
 
   const {
@@ -11,10 +11,10 @@ describe('Things Endpoints', function () {
     testReviews,
   } = helpers.makeThingsFixtures()
 
-  function makeAuthHeader(user) {
-    const token = Buffer.from(`${user.user_name}:${user.password}`).toString('base64')
-    return `Basic ${token}`
-  }
+  // function makeAuthHeader(user) {
+  //   const token = Buffer.from(`${user.user_name}:${user.password}`).toString('base64')
+  //   return `Basic ${token}`
+  // }
 
   before('make knex instance', () => {
     db = knex({
@@ -42,33 +42,27 @@ describe('Things Endpoints', function () {
     )
 
     describe(`GET /api/things/:thing_id`, () => {
-      it(`responds with 401 'Missing basic token' when no basic token`, () => {
+      it(`responds with 401 'Missing bearer token' when no bearer token`, () => {
         return supertest(app)
           .get(`/api/things/123`)
-          .expect(401, { error: `Missing basic token` })
+          .expect(401, { error: `Missing bearer token` })
       })
-
-      it(`responds 401 'Unauthorized request' when no credentials in token`, () => {
-        const userNoCreds = { user_name: '', password: ''}
+      it(`responds 401 'Unauthorized request' when invalid JWT secret`, () => {
+        // const userNoCreds = { user_name: '', password: ''}
+        const validUser = testUsers[0]
+        const invalidSecret = 'bad-secret'
         return supertest(app)
           .get(`/api/things/1232`)
-          .set('Authorization', makeAuthHeader(userNoCreds))
+          // .set('Authorization', helpers.makeAuthHeader(userNoCreds))
+          .set('Authorization', helpers.makeAuthHeader(validUser, invalidSecret))
           .expect(401, { error: `Unauthorized request`})
       })
 
-      it(`responds 401 'Unauthorized request' when invalid user`, () => {
-        const userInvalidCreds = { user_name: 'user-not', password: 'existy' }
+      it(`responds 401 'Unauthorized request' when invalid sub in payload `, () => {
+        const invalidUser = { user_name: 'user-not-existy', id: 1}
         return supertest(app)
           .get(`/api/things/1`)
-          .set('Authorization', makeAuthHeader(userInvalidCreds))
-          .expect(401, { error: `Unauthorized request` })
-      })
-
-      it(`responds 401 'Unauthorized request' when invalid password`, () => {
-        const userInvalidPass = { user_name: testUsers[0].user_name, password: 'wrong' }
-        return supertest(app)
-          .get(`/api/things/1`)
-          .set('Authorization', makeAuthHeader(userInvalidPass))
+          .set('Authorization', helpers.makeAuthHeader(invalidUser))
           .expect(401, { error: `Unauthorized request` })
       })
 
@@ -139,13 +133,13 @@ describe('Things Endpoints', function () {
   describe(`GET /api/things/:thing_id`, () => {
     context(`Given no things`, () => {
       beforeEach(() => 
-        db.into('thingful_users').insert(testUsers)
+        helpers.seedUsers(db, testUsers)
         )
       it(`responds with 404`, () => {
         const thingId = 123456
         return supertest(app)
           .get(`/api/things/${thingId}`)
-          .set('Authorization', makeAuthHeader(testUsers[0]))
+          .set('Authorization', helpers.makeAuthHeader(testUsers[0]))
           .expect(404, { error: `Thing doesn't exist` })
       })
     })
@@ -170,7 +164,7 @@ describe('Things Endpoints', function () {
 
         return supertest(app)
           .get(`/api/things/${thingId}`)
-          .set('Authorization', makeAuthHeader(testUsers[0]))
+          .set('Authorization', helpers.makeAuthHeader(testUsers[0]))
           .expect(200, expectedThing)
       })
     })
@@ -193,7 +187,7 @@ describe('Things Endpoints', function () {
       it('removes XSS attack content', () => {
         return supertest(app)
           .get(`/api/things/${maliciousThing.id}`)
-          .set('Authorization', makeAuthHeader(testUser))
+          .set('Authorization', helpers.makeAuthHeader(testUser))
           .expect(200)
           .expect(res => {
             expect(res.body.title).to.eql(expectedThing.title)
@@ -207,14 +201,14 @@ describe('Things Endpoints', function () {
     
     context(`Given no things`, () => {
       beforeEach(() =>
-        db.into('thingful_users').insert(testUsers)
+        helpers.seedUsers(db, testUsers)
       )
 
       it(`responds with 404`, () => {
         const thingId = 123456
         return supertest(app)
           .get(`/api/things/${thingId}/reviews`)
-          .set('Authorization', makeAuthHeader(testUsers[0]))
+          .set('Authorization', helpers.makeAuthHeader(testUsers[0]))
           .expect(404, { error: `Thing doesn't exist` })
       })
     })
@@ -237,7 +231,7 @@ describe('Things Endpoints', function () {
 
         return supertest(app)
           .get(`/api/things/${thingId}/reviews`)
-          .set('Authorization', makeAuthHeader(testUsers[0]))
+          .set('Authorization', helpers.makeAuthHeader(testUsers[0]))
           .expect(200, expectedReviews)
       })
     })
